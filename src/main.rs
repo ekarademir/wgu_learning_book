@@ -76,15 +76,17 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        todo!()
+        self.size = new_size;
+        self.sc_desc.width = new_size.width;
+        self.sc_desc.height = new_size.height;
+        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        todo!()
+        false
     }
 
     fn update(&mut self) {
-        todo!()
     }
 
     fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
@@ -99,23 +101,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let window = WindowBuilder::new()
         .build(&event_loop)?;
 
+    let mut state = futures::executor::block_on(State::new(&window))?;
+
+
     event_loop.run(move |event, _, control_flow|
         match event {
             Event::WindowEvent {
                 ref event,
                 window_id
-            } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => *control_flow = handle_exit(ExitReason::CloseRequest),
-                WindowEvent::KeyboardInput { input, .. } => match input {
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    } => *control_flow = handle_exit(ExitReason::Escape),
+            } if window_id == window.id() => if !state.input(event) {
+                match event {
+                    WindowEvent::CloseRequested => *control_flow = handle_exit(ExitReason::CloseRequest),
+                    WindowEvent::KeyboardInput { input, .. } => match input {
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        } => *control_flow = handle_exit(ExitReason::Escape),
+                        _ => {}
+                    }
+                    WindowEvent::Resized(physical_size) => {
+                        state.resize(*physical_size)
+                    }
+                    WindowEvent::ScaleFactorChanged {new_inner_size, ..} => {
+                        // new_inner_size is &&mut so we have to dereference it twice
+                        state.resize(**new_inner_size);
+                    }
+
                     _ => {}
                 }
-
-                _ => {}
             }
 
             _ => {}
