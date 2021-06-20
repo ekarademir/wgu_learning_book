@@ -3,7 +3,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use log::{info, error};
+use log::{debug, info, error};
 use winit::window::Window;
 
 struct State {
@@ -13,6 +13,7 @@ struct State {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
+    mouse_pos: cgmath::Point2<f64>,
 }
 
 impl State {
@@ -71,6 +72,7 @@ impl State {
                 sc_desc,
                 swap_chain,
                 size,
+                mouse_pos: cgmath::Point2 {x: 0.0, y: 0.0},
             }
         )
     }
@@ -83,7 +85,15 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved {position, ..} => {
+                self.mouse_pos.x = position.x;
+                self.mouse_pos.y = position.y;
+                // debug!("Mouse moved to point: {:?}", self.mouse_pos);
+                true
+            }
+            _ => false
+        }
     }
 
     fn update(&mut self) {
@@ -110,7 +120,10 @@ impl State {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.1, g: 0.2, b: 0.3, a: 1.0,
+                                    r: self.mouse_pos.x / self.size.width as f64,
+                                    g:  self.mouse_pos.y / self.size.height as f64,
+                                    b: 0.3,
+                                    a: 1.0,
                                 }),
                                 store: true,
                             }
@@ -128,7 +141,10 @@ impl State {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    env_logger::Builder::new()
+        .filter_module(
+            "learn_wgpu_book", log::LevelFilter::Debug
+        ).init();
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -199,7 +215,7 @@ fn handle_exit(why: ExitReason) -> ControlFlow {
         ExitReason::OOM => "System is OOM",
     };
 
-    info!("{}", reason);
+    debug!("{}", reason);
     info!("Bye");
     ControlFlow::Exit
 }
