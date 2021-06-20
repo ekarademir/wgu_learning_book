@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rustc-env=RUST_LOG=debug");
+    println!("cargo:rustc-env=RUST_LOG=info");
 }
