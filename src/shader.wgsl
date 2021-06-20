@@ -1,6 +1,7 @@
 // Vertex shader
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
+    [[location(0)]] position: vec2<f32>;
 };
 
 [[stage(vertex)]]
@@ -10,6 +11,7 @@ fn main(
     var out: VertexOutput;
     let x = f32(1 - i32(in_vertex_index)) * 0.5;
     let y = f32(i32(in_vertex_index & 1u) * 2 - 1) * 0.5;
+    out.position = vec2<f32>(x, y);
     out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
     return out;
 }
@@ -17,5 +19,5 @@ fn main(
 // Fragment shader
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+    return vec4<f32>(in.position, 0.1, 1.0);
 }
