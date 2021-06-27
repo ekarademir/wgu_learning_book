@@ -7,6 +7,9 @@ use winit::{
 use log::{debug, info, error};
 use winit::window::Window;
 
+#[macro_use]
+extern crate bitflags;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
@@ -37,11 +40,11 @@ impl Vertex {
 
 // main.rs
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [1.0, 0.0, 0.0] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.0, 0.0, 0.0] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [1.0, 1.0, 1.0] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.0, 0.0, 1.0] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0],color: [0.0, 1.0, 0.0] }, // E
+    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.5, 0.0] }, // A
+    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.5, 0.0] }, // B
+    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.5, 0.0] }, // C
+    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.5, 0.0] }, // D
+    Vertex { position: [0.44147372, 0.2347359, 0.0],color: [0.5, 0.5, 0.0] }, // E
 ];
 
 const INDICES: &[u16] = &[
@@ -54,6 +57,21 @@ const INDICES: &[u16] = &[
     /* padding */ 0,
 ];
 
+const SECOND_INDICES: &[u16] = &[
+    0, 1, 4,
+    2, 3, 4,
+    // WGPU requires 4 bytes buffer alignment (packing)
+    // Above there are 9 u16 numbers which is 9 x 2 bytes
+    // We add one more u16 to square this
+    /* padding */ 0,
+];
+
+bitflags! {
+    struct Levers: u32 {
+        const LEVER1 = 0b00000001;
+        const LEVER2 = 0b00000010;
+    }
+}
 
 
 struct State {
@@ -68,6 +86,9 @@ struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+    second_index_buffer: wgpu::Buffer,
+    second_num_indices: u32,
+    levers: Levers,
 }
 
 impl State {
@@ -185,6 +206,18 @@ impl State {
 
         let num_indices = INDICES.len() as u32;
 
+        let second_index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Second Index Buffer"),
+                contents: bytemuck::cast_slice(SECOND_INDICES),
+                usage: wgpu::BufferUsage::INDEX,
+            }
+        );
+
+        let second_num_indices = SECOND_INDICES.len() as u32;
+
+        let levers = Levers::empty();
+
         Ok(
             Self {
                 surface,
@@ -197,7 +230,10 @@ impl State {
                 render_pipeline,
                 vertex_buffer,
                 index_buffer,
+                second_index_buffer,
                 num_indices,
+                second_num_indices,
+                levers,
             }
         )
     }
@@ -216,7 +252,24 @@ impl State {
                 self.mouse_pos.y = position.y;
                 // debug!("Mouse moved to point: {:?}", self.mouse_pos);
                 true
-            }
+            },
+            WindowEvent::KeyboardInput { input, .. } => match input {
+                KeyboardInput {
+                    state,
+                    virtual_keycode: Some(VirtualKeyCode::Space),
+                    ..
+                } => match state {
+                    ElementState::Pressed => {
+                        self.levers = self.levers | Levers::LEVER1;
+                        true
+                    },
+                    ElementState::Released => {
+                        self.levers = self.levers & !Levers::LEVER1;
+                        true
+                    },
+                },
+                _ => false
+            },
             _ => false
         }
     }
@@ -259,11 +312,19 @@ impl State {
                 }
             );
 
+            let data = {
+                if self.levers.contains(Levers::LEVER1) {
+                    (&self.second_index_buffer, self.second_num_indices)
+                } else {
+                    (&self.index_buffer, self.num_indices)
+                }
+            };
+
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(data.0.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(
-                0..self.num_indices,
+                0..data.1,
                 0,
                 0..1
             );
